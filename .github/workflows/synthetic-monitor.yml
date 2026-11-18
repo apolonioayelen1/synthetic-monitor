@@ -1,0 +1,63 @@
+name: Hybrid Synthetic Monitor
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  synthetic-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Prepare artifacts directory
+        run: mkdir -p "${{ github.workspace }}/artifacts"
+
+      - name: Build Docker image
+        run: docker build -t synthetic-monitor:latest .
+
+      - name: Run Hybrid Synthetic Monitor (Docker)
+        env:
+          BASE_URL: ${{ vars.BASE_URL || 'https://www.saucedemo.com' }}
+          API_HEALTH_URL: ${{ vars.API_HEALTH_URL || 'https://www.saucedemo.com/' }}
+          MONITOR_USERNAME: ${{ secrets.MONITOR_USERNAME }}
+          MONITOR_PASSWORD: ${{ secrets.MONITOR_PASSWORD }}
+          SLA_THRESHOLD_SECONDS: ${{ vars.SLA_THRESHOLD_SECONDS || '3.0' }}
+          BROWSER_HEADLESS: 'true'
+          VIEWPORT_WIDTH: '1920'
+          VIEWPORT_HEIGHT: '1080'
+          ARTIFACTS_DIR: 'artifacts'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          docker run --rm --init --ipc=host \
+            -e BASE_URL \
+            -e API_HEALTH_URL \
+            -e MONITOR_USERNAME \
+            -e MONITOR_PASSWORD \
+            -e SLA_THRESHOLD_SECONDS \
+            -e BROWSER_HEADLESS \
+            -e VIEWPORT_WIDTH \
+            -e VIEWPORT_HEIGHT \
+            -e ARTIFACTS_DIR \
+            -e TELEGRAM_BOT_TOKEN \
+            -e TELEGRAM_CHAT_ID \
+            -e SLACK_WEBHOOK_URL \
+            -v "${{ github.workspace }}/artifacts:/app/artifacts" \
+            synthetic-monitor:latest
+
+      - name: Upload failure screenshots, traces and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: synthetic-artifacts-${{ github.run_number }}
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 7

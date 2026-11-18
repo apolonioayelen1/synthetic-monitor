@@ -89,3 +89,4 @@ def test_hybrid_ecommerce_synthetic_journey(
         checkout_page.complete_order()
 
     logger.info("Synthetic Run Summary:\n" + metrics_collector.format_summary())
+    
